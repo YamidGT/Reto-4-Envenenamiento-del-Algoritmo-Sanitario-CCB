@@ -28,15 +28,47 @@ pip install -r requirements.txt
 python src/demo.py
 ```
 
-Verás en consola: el modelo limpio funcionando, el ataque envenenando el pipeline,
-el modelo comprometido dejando pasar establecimientos peligrosos, y finalmente el
-**sistema de defensa detectando y neutralizando** el envenenamiento.
+Verás en consola: el modelo limpio funcionando, el ataque de **3 vectores**
+envenenando el pipeline, el modelo comprometido dejando pasar establecimientos
+peligrosos, y finalmente la **defensa en profundidad** (criptografía + IA)
+neutralizando el 100% del envenenamiento, con el **gate de despliegue bloqueando**
+el modelo malo antes de que llegue a producción.
 
-Dashboard visual opcional:
+Generar las gráficas para las diapositivas:
+
+```bash
+python src/experimentos.py
+```
+
+Módulos de gobernanza y monitoreo (se pueden correr sueltos ante el jurado):
+
+```bash
+python src/procedencia.py   # LibroMayor: firma + trazabilidad inmutable (Capa 1)
+python src/monitoreo.py     # Detección de drift con alerta y acción (Capa 4)
+```
+
+Dashboard visual interactivo:
 
 ```bash
 streamlit run app/dashboard.py
 ```
+
+---
+
+## 📊 Resultados de la demo (evidencia para el jurado)
+
+| Escenario | Recall (peligrosos detectados) | Peligrosos que se escapan |
+|-----------|-------------------------------|---------------------------|
+| 🟢 Modelo limpio | ~69% | 57 |
+| 🔴 **Envenenado** (ataque 15%) | **~51%** 💥 | 90 |
+| 🛡️ **Recuperado** (con defensa) | **~70%** ✅ | 55 |
+
+- **Capa 1 (criptografía):** neutraliza inyección + manipulación de forma
+  determinística (100%).
+- **Capa 2 (IA):** caza al infiltrado corrupto que firmó datos falsos con clave válida.
+- **Detección global: 100% del ataque** · **el gate bloquea** el modelo envenenado.
+- **Robustez:** con un ataque del 40%, el modelo sin defensa colapsa a ~15% de
+  recall; **con defensa se mantiene sobre 60%** (ver `figuras/robustez.png`).
 
 ---
 
@@ -55,65 +87,48 @@ streamlit run app/dashboard.py
 ├── requirements.txt           # Dependencias
 ├── src/
 │   ├── generar_datos.py       # Genera dataset sintético de establecimientos
-│   ├── modelo.py              # Entrena el modelo de riesgo sanitario
-│   ├── ataque_poisoning.py    # Simula el ataque de envenenamiento
-│   ├── defensa.py             # Sistema de defensa (4 capas)
+│   ├── gobernanza.py          # 🔒 CAPA 1: firma digital HMAC (autenticidad + integridad)
+│   ├── procedencia.py         # 🔒 CAPA 1: LibroMayor inmutable + gate de ingesta (trazabilidad)
+│   ├── modelo.py              # Modelo de riesgo + explicabilidad (importancia de variables)
+│   ├── ataque_poisoning.py    # Ataque de 3 vectores (inyección, manipulación, infiltrado)
+│   ├── defensa.py             # 🛡️ Defensa en profundidad (Capa 1 + Capa 2 + gate de despliegue)
+│   ├── monitoreo.py           # 📡 CAPA 4: detección de drift (KS, PSI) con alerta y acción
+│   ├── experimentos.py        # Genera las gráficas (curva de robustez, resumen)
 │   └── demo.py                # Orquesta la historia completa (ATAQUE vs DEFENSA)
 ├── app/
-│   └── dashboard.py           # Dashboard visual (Streamlit)
+│   └── dashboard.py           # Dashboard visual interactivo (Streamlit)
+├── figuras/                   # Gráficas PNG para las diapositivas (las crea experimentos.py)
 └── docs/
+    ├── CONTEXTO.md            # Onboarding del equipo (leer primero)
     ├── ESTRATEGIA.md          # Propuesta de solución para el jurado
-    └── PRESENTACION.md        # Guion de la presentación (pitch)
+    ├── PRESENTACION.md        # Guion de la presentación (pitch)
+    └── PLAN_ALEJANDRO.md      # Diseño de gobernanza/monitoreo y alineación normativa
 ```
 
 ---
 
-## 🛠️ Próximas tareas técnicas (mejora continua)
+## ✅ Estado de implementación (las 4 capas, en código)
 
-Reparto en 3 líneas paralelas que tocan archivos distintos (para evitar choques de Git).
+| Capa | Componente | Estado |
+|------|-----------|--------|
+| 1 | Firma digital HMAC-SHA256 (`gobernanza.py`) | ✅ Implementado |
+| 1 | LibroMayor inmutable + gate de ingesta (`procedencia.py`) | ✅ Implementado |
+| 2 | Detección: referencia + reglas + anomalías (`defensa.py`) | ✅ Implementado |
+| 3 | Reentrenamiento robusto + gate de despliegue (`defensa.py`) | ✅ Implementado |
+| 4 | Monitoreo de *drift* con alerta y acción (`monitoreo.py`) | ✅ Implementado |
+| — | Explicabilidad (importancia de variables, `modelo.py`) | ✅ Implementado |
+| — | Ataque de 3 vectores (`ataque_poisoning.py`) | ✅ Implementado |
+| — | Curva de robustez y gráficas (`experimentos.py`) | ✅ Implementado |
+| — | Dashboard interactivo (`dashboard.py`) | ✅ Implementado |
 
-### Yamid — Arreglar el corazón de la detección (`src/defensa.py`, `src/modelo.py`)
+> 📐 **Alineación normativa:** el diseño de gobernanza y monitoreo se mapea a
+> **ISO/IEC 27001** (seguridad de la información), **ISO/IEC 42001** (gestión de
+> IA), **NIST AI RMF** y el **EU AI Act**. Detalle en
+> [docs/PLAN_ALEJANDRO.md](docs/PLAN_ALEJANDRO.md).
 
-- [ ] **Desacoplar el Detector B del atacante.** Reemplazar los umbrales de
-  `deteccion_por_reglas()` por valores basados en normativa sanitaria real (ej.
-  INVIMA / Resolución 2674 de 2013 sobre cadena de frío y buenas prácticas), no
-  en los rangos exactos que usa `_fabricar_registros_falsos()`. Meta: que el
-  detector funcione aunque cambien los parámetros del ataque.
-- [ ] **Explicabilidad real.** En `modelo.py`, añadir `importancia_variables(modelo)`
-  que devuelva `modelo.feature_importances_` ordenado, y usarla en `demo.py` para
-  imprimir el top 5 de variables que más pesan en la predicción.
-- [ ] Validar que `python src/demo.py` siga dando resultados coherentes tras el
-  cambio de umbrales.
-
-### Andrés — Robustez y evidencia cuantitativa (archivo nuevo `src/robustez.py`)
-
-- [ ] Script que corra el pipeline completo (`envenenar` → `entrenar_modelo` →
-  `detectar_envenenamiento` → reentrenar) con varias semillas e intensidades de
-  ataque (tasas 0.05, 0.15, 0.25, 0.35 × 5 semillas cada una).
-- [ ] Guardar los resultados (recall limpio/envenenado/recuperado, % de veneno
-  detectado) en un DataFrame y exportarlo a CSV.
-- [ ] Añadir al dashboard (`app/dashboard.py`) un gráfico de recall recuperado vs.
-  intensidad del ataque, para demostrar que la defensa no depende de un solo run
-  con suerte.
-- [ ] Extra si hay tiempo: tabla en el dashboard con los registros en cuarentena
-  y la razón (qué detector los marcó).
-
-### Alejandro — Convertir las Capas 1 y 4 de prosa a código (archivos nuevos
-`src/gobernanza.py`, `src/monitoreo.py`)
-
-- [ ] `src/gobernanza.py`: `firmar_registro(registro, clave_secreta)` (HMAC/hash
-  del registro, simula la firma digital de la fuente) y
-  `verificar_firma(registro, firma, clave_secreta)`.
-- [ ] `src/monitoreo.py`: `detectar_drift(distribucion_referencia, distribucion_actual)`
-  con una prueba simple (ej. diferencia de proporción de "seguros" entre dos
-  ventanas de tiempo, o test KS) que dispare una alerta si cambia bruscamente.
-- [ ] Incluir un ejemplo corto en `if __name__ == "__main__":` de cada archivo
-  (como en `ataque_poisoning.py`) para poder mostrarlas sueltas si el jurado
-  pregunta dónde está esto en el código.
-
-**Coordinación:** cada quien trabaja en archivos separados para poder hacer
-`git pull` sin conflictos. Commits pequeños y descriptivos
-(`feat: detector B basado en normativa real`, etc.).
+**Roadmap (mejora continua):** firma en origen desde HSM/KMS en producción,
+integración de las reglas de dominio con normativa INVIMA (Resolución 2674 de 2013)
+y tablero de auditoría con el LibroMayor en vivo.
 
 ---
 

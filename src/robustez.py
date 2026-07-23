@@ -21,11 +21,12 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from generar_datos import generar_datos
 from modelo import entrenar_modelo, evaluar
+from gobernanza import firmar_dataset, verificar_dataset
 from ataque_poisoning import envenenar
 from defensa import (
     detectar_envenenamiento, metricas_deteccion, limpiar_dataset,
     entrenar_modelo_referencia, deteccion_por_referencia,
-    deteccion_por_reglas, deteccion_por_anomalias,
+    deteccion_por_reglas, deteccion_por_anomalias, gate_despliegue,
 )
 
 TASAS_DEFECTO = (0.05, 0.15, 0.25, 0.35)
@@ -43,14 +44,14 @@ def correr_experimento(tasa, semilla, datos):
     es consistente o si depende de un golpe de suerte puntual.
     """
     semilla_confianza = datos.iloc[:400].copy()
-    train_limpio = datos.iloc[400:2400].copy()
+    train_firmado = firmar_dataset(datos.iloc[400:2400].copy())
     test_dorado = datos.iloc[2400:].copy()
 
     ref = entrenar_modelo_referencia(semilla_confianza, semilla=semilla)
 
-    m_limpio = evaluar(entrenar_modelo(train_limpio, semilla=semilla), test_dorado)
+    m_limpio = evaluar(entrenar_modelo(train_firmado, semilla=semilla), test_dorado)
 
-    train_env = envenenar(train_limpio, tasa=tasa, semilla=semilla)
+    train_env = envenenar(train_firmado, tasa=tasa, semilla=semilla)
     m_env = evaluar(entrenar_modelo(train_env, semilla=semilla), test_dorado)
 
     sospechoso, reporte = detectar_envenenamiento(train_env, ref)
@@ -64,6 +65,9 @@ def correr_experimento(tasa, semilla, datos):
         (m_rec["recall_riesgo"] - m_env["recall_riesgo"]) / caida
         if caida > 1e-9 else np.nan
     )
+
+    gate_env_ok, _ = gate_despliegue(m_env, metricas_referencia=m_limpio)
+    gate_rec_ok, _ = gate_despliegue(m_rec, metricas_referencia=m_limpio)
 
     return {
         "tasa_ataque": tasa,
@@ -79,6 +83,8 @@ def correr_experimento(tasa, semilla, datos):
         "precision_defensa": md["precision_defensa"] if md else None,
         "falsas_alarmas": md["falsas_alarmas"] if md else None,
         "sospechosos_final": reporte["sospechosos_final"],
+        "gate_bloquea_envenenado": not gate_env_ok,
+        "gate_aprueba_recuperado": gate_rec_ok,
     }
 
 
@@ -117,14 +123,22 @@ def resumen_por_tasa(df_resultados):
 def registros_en_cuarentena_con_razon(df, modelo_referencia):
     """Devuelve el subconjunto en cuarentena con la razón (qué detector lo
     marcó), para el dashboard: transparencia de por qué se aisló cada dato."""
-    s_ref = deteccion_por_referencia(df, modelo_referencia)
-    s_reglas = deteccion_por_reglas(df)
-    s_anomalias = deteccion_por_anomalias(df)
-    sospechoso = s_ref | s_reglas | (s_anomalias & (s_ref | s_reglas))
+    if "firma" in df.columns:
+        firma_valida = verificar_dataset(df)
+    else:
+        firma_valida = np.ones(len(df), dtype=bool)
+    s_firma = ~firma_valida
+
+    s_ref = deteccion_por_referencia(df, modelo_referencia) & firma_valida
+    s_reglas = deteccion_por_reglas(df) & firma_valida
+    s_anomalias = deteccion_por_anomalias(df) & firma_valida
+    sospechoso = s_firma | s_ref | s_reglas | (s_anomalias & (s_ref | s_reglas))
 
     razones = []
-    for ref_i, reglas_i, anom_i in zip(s_ref, s_reglas, s_anomalias):
+    for firma_i, ref_i, reglas_i, anom_i in zip(s_firma, s_ref, s_reglas, s_anomalias):
         motivos = []
+        if firma_i:
+            motivos.append("firma inválida (capa 1)")
         if ref_i:
             motivos.append("verdad de campo (referencia)")
         if reglas_i:

@@ -68,9 +68,11 @@ lo corres y ves los números. Está en la carpeta `src/`:
 | Archivo | Qué hace |
 |---------|----------|
 | `generar_datos.py`   | Inventa 3.000 establecimientos realistas con su nivel de riesgo real |
-| `modelo.py`          | Entrena la IA que predice el riesgo |
-| `ataque_poisoning.py`| Simula el ataque de los competidores deshonestos |
-| `defensa.py`         | **Nuestro sistema de defensa** (lo más importante) |
+| `gobernanza.py`      | 🔒 **Capa 1:** firma digital de cada dato (autenticidad + integridad) |
+| `modelo.py`          | Entrena la IA que predice el riesgo + explica sus decisiones |
+| `ataque_poisoning.py`| Simula el ataque de 3 vectores de los competidores deshonestos |
+| `defensa.py`         | 🛡️ **Nuestro sistema de defensa** (lo más importante) + gate de despliegue |
+| `experimentos.py`    | Genera las gráficas para las diapositivas |
 | `demo.py`            | Junta todo y cuenta la historia en 3 actos |
 
 ### Cómo correrlo (2 minutos)
@@ -81,11 +83,18 @@ python src/demo.py
 ```
 
 Verás 3 actos:
-- **ACTO 1:** la IA limpia funciona bien.
-- **ACTO 2:** el ataque envenena los datos → la IA empieza a dejar pasar
-  establecimientos peligrosos como "seguros" (el recall se desploma ~22 puntos).
-- **ACTO 3:** nuestra defensa detecta ~78% del veneno, limpia los datos y
-  **recupera ~61%** del desempeño perdido. Confianza restaurada.
+- **ACTO 1:** la IA limpia funciona bien (~69% de recall).
+- **ACTO 2:** el ataque de 3 vectores envenena los datos → la IA empieza a dejar
+  pasar establecimientos peligrosos como "seguros" (el recall cae ~18 puntos).
+- **ACTO 3:** la defensa en profundidad detecta el **100% del veneno**
+  (criptografía + IA), el **gate bloquea** el modelo malo, y el modelo reentrenado
+  **recupera por completo** el desempeño (~70%). Confianza restaurada.
+
+Para generar las gráficas (curva de robustez, etc.):
+
+```bash
+python src/experimentos.py
+```
 
 > 💡 Los números concretos salen al correr la demo. Úsalos en la presentación:
 > son nuestra evidencia.
@@ -129,13 +138,16 @@ Verás 3 actos:
 
 - [x] Estructura del repo
 - [x] Generador de datos sintéticos
-- [x] Modelo de riesgo
-- [x] Simulación del ataque (2 vectores)
-- [x] Sistema de defensa (3 detectores + reentrenamiento)
-- [x] Demo end-to-end funcionando
-- [x] Documento de estrategia para el jurado
-- [x] Guion de presentación
-- [ ] Slides finales (Andrés)
+- [x] Modelo de riesgo + explicabilidad
+- [x] 🔒 Capa 1: firma digital criptográfica (`gobernanza.py`)
+- [x] Simulación del ataque de **3 vectores** (inyección, manipulación, infiltrado)
+- [x] 🛡️ Defensa en profundidad (Capa 1 cripto + Capa 2 IA con 3 detectores)
+- [x] Gate de despliegue (bloquea modelos envenenados)
+- [x] Curva de robustez + gráficas (`experimentos.py`)
+- [x] Demo end-to-end funcionando (detección 100%, recuperación completa)
+- [x] Dashboard interactivo
+- [x] Documentos de estrategia y presentación
+- [ ] Slides finales (Andrés) ← usar `figuras/robustez.png` y `figuras/resumen.png`
 - [ ] Ensayar el pitch (todos)
 
 ¡A darle! 🚀

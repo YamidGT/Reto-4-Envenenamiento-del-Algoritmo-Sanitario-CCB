@@ -51,6 +51,23 @@ def evaluar(modelo, df_test, etiqueta="MODELO"):
     return metricas
 
 
+def importancia_variables(modelo):
+    """Devuelve la lista de FEATURES ordenada por importancia (mayor a menor)
+    según el RandomForest. Es la base de la explicabilidad: qué variables
+    pesaron más en la predicción, para poder auditar y defender el modelo."""
+    importancias = sorted(
+        zip(FEATURES, modelo.feature_importances_),
+        key=lambda par: par[1], reverse=True,
+    )
+    return importancias
+
+
+def imprimir_importancia(importancias, top=5):
+    print(f"  Top {top} variables que más pesan en la predicción:")
+    for i, (variable, peso) in enumerate(importancias[:top], start=1):
+        print(f"  {i}. {variable} .......... {peso:.1%}")
+
+
 def imprimir_metricas(m):
     print(f"  ├─ Accuracy .......................... {m['accuracy']:.1%}")
     print(f"  ├─ Precisión (alto riesgo) ........... {m['precision_riesgo']:.1%}")
