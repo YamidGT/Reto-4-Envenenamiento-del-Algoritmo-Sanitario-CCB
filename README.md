@@ -68,6 +68,55 @@ streamlit run app/dashboard.py
 
 ---
 
+## 🛠️ Próximas tareas técnicas (mejora continua)
+
+Reparto en 3 líneas paralelas que tocan archivos distintos (para evitar choques de Git).
+
+### Yamid — Arreglar el corazón de la detección (`src/defensa.py`, `src/modelo.py`)
+
+- [ ] **Desacoplar el Detector B del atacante.** Reemplazar los umbrales de
+  `deteccion_por_reglas()` por valores basados en normativa sanitaria real (ej.
+  INVIMA / Resolución 2674 de 2013 sobre cadena de frío y buenas prácticas), no
+  en los rangos exactos que usa `_fabricar_registros_falsos()`. Meta: que el
+  detector funcione aunque cambien los parámetros del ataque.
+- [ ] **Explicabilidad real.** En `modelo.py`, añadir `importancia_variables(modelo)`
+  que devuelva `modelo.feature_importances_` ordenado, y usarla en `demo.py` para
+  imprimir el top 5 de variables que más pesan en la predicción.
+- [ ] Validar que `python src/demo.py` siga dando resultados coherentes tras el
+  cambio de umbrales.
+
+### Andrés — Robustez y evidencia cuantitativa (archivo nuevo `src/robustez.py`)
+
+- [ ] Script que corra el pipeline completo (`envenenar` → `entrenar_modelo` →
+  `detectar_envenenamiento` → reentrenar) con varias semillas e intensidades de
+  ataque (tasas 0.05, 0.15, 0.25, 0.35 × 5 semillas cada una).
+- [ ] Guardar los resultados (recall limpio/envenenado/recuperado, % de veneno
+  detectado) en un DataFrame y exportarlo a CSV.
+- [ ] Añadir al dashboard (`app/dashboard.py`) un gráfico de recall recuperado vs.
+  intensidad del ataque, para demostrar que la defensa no depende de un solo run
+  con suerte.
+- [ ] Extra si hay tiempo: tabla en el dashboard con los registros en cuarentena
+  y la razón (qué detector los marcó).
+
+### Alejandro — Convertir las Capas 1 y 4 de prosa a código (archivos nuevos
+`src/gobernanza.py`, `src/monitoreo.py`)
+
+- [ ] `src/gobernanza.py`: `firmar_registro(registro, clave_secreta)` (HMAC/hash
+  del registro, simula la firma digital de la fuente) y
+  `verificar_firma(registro, firma, clave_secreta)`.
+- [ ] `src/monitoreo.py`: `detectar_drift(distribucion_referencia, distribucion_actual)`
+  con una prueba simple (ej. diferencia de proporción de "seguros" entre dos
+  ventanas de tiempo, o test KS) que dispare una alerta si cambia bruscamente.
+- [ ] Incluir un ejemplo corto en `if __name__ == "__main__":` de cada archivo
+  (como en `ataque_poisoning.py`) para poder mostrarlas sueltas si el jurado
+  pregunta dónde está esto en el código.
+
+**Coordinación:** cada quien trabaja en archivos separados para poder hacer
+`git pull` sin conflictos. Commits pequeños y descriptivos
+(`feat: detector B basado en normativa real`, etc.).
+
+---
+
 ## 👥 Equipo
 
 - Yamid GT — [@YamidGT](https://github.com/YamidGT)
