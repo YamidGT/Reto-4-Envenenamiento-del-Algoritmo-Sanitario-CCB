@@ -101,15 +101,19 @@ Reparto en 3 líneas paralelas que tocan archivos distintos (para evitar choques
 ### Alejandro — Convertir las Capas 1 y 4 de prosa a código (archivos nuevos
 `src/gobernanza.py`, `src/monitoreo.py`)
 
-- [ ] `src/gobernanza.py`: `firmar_registro(registro, clave_secreta)` (HMAC/hash
+- [x] `src/gobernanza.py`: `firmar_registro(registro, clave_secreta)` (HMAC-SHA256
   del registro, simula la firma digital de la fuente) y
-  `verificar_firma(registro, firma, clave_secreta)`.
-- [ ] `src/monitoreo.py`: `detectar_drift(distribucion_referencia, distribucion_actual)`
-  con una prueba simple (ej. diferencia de proporción de "seguros" entre dos
-  ventanas de tiempo, o test KS) que dispare una alerta si cambia bruscamente.
-- [ ] Incluir un ejemplo corto en `if __name__ == "__main__":` de cada archivo
-  (como en `ataque_poisoning.py`) para poder mostrarlas sueltas si el jurado
-  pregunta dónde está esto en el código.
+  `verificar_firma(registro, firma, clave_secreta)`. Incluye además canonicalización
+  determinista, `LibroMayor` (log inmutable con encadenamiento de hash) y un
+  `gate_ingesta` que rechaza registros sin firma válida (los `FAKE-*` del ataque).
+- [x] `src/monitoreo.py`: `detectar_drift(distribucion_referencia, distribucion_actual)`
+  combina diferencia de proporción de "seguros", test KS y PSI para disparar
+  una alerta con severidad (OK/ALERTA/CRÍTICO) y una acción recomendada
+  (human-in-the-loop: nunca actúa solo).
+- [x] Ejemplo ejecutable en `if __name__ == "__main__":` de cada archivo — correr
+  `python src/gobernanza.py` y `python src/monitoreo.py` para verlas sueltas.
+  Detalle del diseño y su alineación con ISO 27001/42001, NIST y el EU AI Act en
+  [docs/PLAN_ALEJANDRO.md](docs/PLAN_ALEJANDRO.md).
 
 **Coordinación:** cada quien trabaja en archivos separados para poder hacer
 `git pull` sin conflictos. Commits pequeños y descriptivos
