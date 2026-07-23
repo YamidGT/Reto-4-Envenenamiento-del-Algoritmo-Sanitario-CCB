@@ -21,6 +21,8 @@ from modelo import entrenar_modelo, evaluar                 # noqa: E402
 from ataque_poisoning import envenenar                      # noqa: E402
 from defensa import (detectar_envenenamiento, metricas_deteccion,  # noqa: E402
                      limpiar_dataset, entrenar_modelo_referencia)
+from robustez import (correr_barrido, resumen_por_tasa,             # noqa: E402
+                      registros_en_cuarentena_con_razon)
 
 st.set_page_config(page_title="Defensa Anti-Envenenamiento Sanitario",
                    page_icon="🛡️", layout="wide")
@@ -61,11 +63,11 @@ def pipeline(tasa):
     train_saneado = limpiar_dataset(train_env, sospechoso)
     m_rec = evaluar(entrenar_modelo(train_saneado), test_dorado, "RECUPERADO")
 
-    return m_limpio, m_env, m_rec, reporte, md
+    return m_limpio, m_env, m_rec, reporte, md, train_env, ref
 
 
 if correr or tasa:
-    m_limpio, m_env, m_rec, reporte, md = pipeline(tasa)
+    m_limpio, m_env, m_rec, reporte, md, train_env, ref = pipeline(tasa)
 
     st.subheader("📊 Impacto en el RECALL (peligrosos detectados)")
     c1, c2, c3 = st.columns(3)
@@ -105,5 +107,45 @@ if correr or tasa:
 
     st.info("💡 Sube la intensidad del ataque en la barra lateral y observa cómo "
             "la defensa sigue conteniendo el daño.")
+
+    st.subheader("🗂️ Registros en cuarentena (con razón de detección)")
+    cuarentena_df = registros_en_cuarentena_con_razon(train_env, ref)
+    st.caption(f"{len(cuarentena_df)} registros aislados en esta corrida.")
+    st.dataframe(cuarentena_df, use_container_width=True)
 else:
     st.info("👈 Ajusta los parámetros y presiona **Ejecutar simulación**.")
+
+st.markdown("---")
+st.subheader("📈 Robustez: ¿la defensa depende de un solo run con suerte?")
+st.caption("Barrido de 4 intensidades de ataque x 5 semillas cada una (20 "
+          "corridas independientes) — media y desviación estándar.")
+
+if st.button("🔁 Correr barrido de robustez (puede tardar ~1-2 min)"):
+    with st.spinner("Corriendo 20 experimentos (4 tasas x 5 semillas)..."):
+        df_barrido = correr_barrido()
+        resumen = resumen_por_tasa(df_barrido)
+
+    st.session_state["df_barrido"] = df_barrido
+    st.session_state["resumen_barrido"] = resumen
+
+if "resumen_barrido" in st.session_state:
+    resumen = st.session_state["resumen_barrido"]
+    chart_robustez = resumen.set_index("tasa_ataque")[
+        ["recall_recuperado_pct_media", "pct_veneno_detectado_media"]
+    ].rename(columns={
+        "recall_recuperado_pct_media": "% desempeño recuperado",
+        "pct_veneno_detectado_media": "% veneno detectado",
+    })
+    st.line_chart(chart_robustez)
+    st.dataframe(
+        resumen.rename(columns={
+            "tasa_ataque": "Tasa de ataque",
+            "recall_recuperado_pct_media": "Recuperado (media)",
+            "recall_recuperado_pct_std": "Recuperado (std)",
+            "pct_veneno_detectado_media": "Veneno detectado (media)",
+            "pct_veneno_detectado_std": "Veneno detectado (std)",
+        }),
+        use_container_width=True,
+    )
+    st.caption("Los datos completos (20 filas, una por corrida) se guardan en "
+              "`results/robustez_resultados.csv` al correr `python src/robustez.py`.")
