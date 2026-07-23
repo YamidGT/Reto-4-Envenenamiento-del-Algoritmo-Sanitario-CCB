@@ -30,32 +30,42 @@
 ### Slide 3 — ¿Qué es Data Poisoning? (analogía, 30 seg)
 - **El perro guardián:** si entrenas al perro con fotos de ladrones etiquetadas como
   "amigos", aprende a dejarlos entrar. Eso le hicieron a la IA.
-- Dos vectores: **cambiar etiquetas** + **inyectar datos falsos**.
+- **3 vectores:** inyectar datos falsos + cambiar etiquetas + un **infiltrado
+  corrupto** que mete datos falsos "legítimos".
 
 ### Slide 4 — Impacto (con NÚMEROS de la demo)
 - Tabla del "Resumen Ejecutivo" de la demo:
   | Modelo | Recall (peligrosos detectados) | Peligrosos que se escapan |
   |--------|-------|------|
   | Limpio | ~69% | 57 |
-  | **Envenenado** 💥 | **~47%** | **98** |
-- Frase: *"41 establecimientos peligrosos adicionales dejarían de ser inspeccionados."*
+  | **Envenenado** 💥 | **~51%** | **90** |
+- Frase: *"33 establecimientos peligrosos adicionales dejarían de ser inspeccionados."*
+- 📊 Apoyar con `figuras/resumen.png`.
 
 ### Slide 5 — Nuestra solución (la gran idea)
 - **"No confiamos ciegamente en el dato: lo firmamos, lo auditamos, lo validamos
   contra la verdad de campo y vigilamos el modelo."**
 - El diagrama de las **4 capas** (Gobernanza → Detección → Robustez → Monitoreo).
+- Clave: **defensa en profundidad** — ninguna capa sola basta, por eso montamos varias.
 
-### Slide 6 — Cómo detectamos el veneno (Capa 2, el corazón)
-- 3 detectores independientes:
-  1. **Verdad de campo** (semilla de confianza) → caza etiquetas cambiadas.
-  2. **Reglas de dominio** (el inspector experto) → caza inyecciones.
-  3. **Anomalías** (Isolation Forest) → caza lo estadísticamente raro.
-- Consenso → **cuarentena** (no borrado a ciegas, revisión humana).
+### Slide 6 — Defensa en profundidad: qué detiene cada capa
+- **🔒 Capa 1 · Criptografía (determinística):** cada dato se firma en origen
+  (HMAC). La firma da **autenticidad** (nadie externo puede inyectar) e
+  **integridad** (si tocan la etiqueta, la firma se rompe). → Frena inyección y
+  manipulación **al instante, sin falsos positivos**.
+- **🧠 Capa 2 · IA (estadística):** para el caso difícil — un **infiltrado con
+  clave válida** que firma datos falsos. Lo cazan 3 detectores:
+  1. **Verdad de campo** (semilla de confianza) · 2. **Reglas de dominio** ·
+  3. **Anomalías** (Isolation Forest).
+- Resultado en la demo: **100% del veneno detectado** (los 3 vectores).
 
 ### Slide 7 — 🖥️ DEMO EN VIVO
-- Corre `python src/demo.py` en pantalla.
-- Señala: ACTO 1 (limpio) → ACTO 2 (ataque, recall se desploma) → ACTO 3
-  (defensa: **~78% del veneno detectado, ~61% del desempeño recuperado**).
+- Corre `python src/demo.py` en pantalla (o el dashboard `streamlit run app/dashboard.py`).
+- Señala: ACTO 1 (limpio) → ACTO 2 (ataque de 3 vectores, recall se desploma) →
+  ACTO 3 (Capa 1 rechaza 200 · Capa 2 caza al infiltrado · **gate BLOQUEA** el
+  modelo malo · recuperación **completa**).
+- 📊 Cierra con `figuras/robustez.png`: *"aunque envenenen el 40% del pipeline,
+  nuestra defensa aguanta sobre el 60%; sin defensa colapsa al 15%."*
 - *Este es el momento que gana el reto. Que se vea correr.*
 
 ### Slide 8 — Por qué SALVA la iniciativa
@@ -65,10 +75,11 @@
 - **Ataca la corrupción de raíz**: firmar y castigar fuentes que mienten.
 
 ### Slide 9 — Innovación + Roadmap
-- Diferenciadores: **semilla de confianza**, **cuarentena vs. borrado**,
-  **gate de despliegue** (ningún modelo entra a producción si empeora el recall).
+- Diferenciadores: **firma digital en origen**, **semilla de confianza**,
+  **cuarentena vs. borrado**, **gate de despliegue** (ningún modelo entra a
+  producción si empeora el recall → el envenenamiento se vuelve inútil).
 - Roadmap por fases: Contención (semana 1) → Detección (mes 1) → Gobernanza →
-  Robustez.
+  Robustez + monitoreo de *drift*.
 
 ### Slide 10 — Cierre
 - *"La tecnología no falló: le faltó blindaje. Nosotros se lo damos."*

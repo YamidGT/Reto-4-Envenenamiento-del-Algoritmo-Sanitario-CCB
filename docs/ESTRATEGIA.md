@@ -60,13 +60,19 @@ credibilidad es lo primero que se pierde.
 ### 🔒 CAPA 1 — Gobernanza del dato (prevenir que entre el veneno)
 
 **Objetivo:** que ningún dato entre al pipeline sin identidad ni trazabilidad.
+✅ *Implementado en código (`src/gobernanza.py`): firma HMAC-SHA256 real.*
 
 - **Firma digital de la fuente:** cada registro se firma criptográficamente en su
-  origen (inspector, sensor IoT, sistema municipal). Un dato sin firma válida
-  **no entra**. El atacante ya no puede inyectar registros anónimos.
+  origen (inspector, sensor IoT, sistema municipal) con **HMAC-SHA256**. La firma
+  cubre las variables **y la etiqueta**, dando dos garantías: **autenticidad**
+  (un dato sin firma válida **no entra** → adiós inyección externa) e
+  **integridad** (si manipulan la etiqueta tras firmar, la firma deja de coincidir
+  → adiós tampering). En producción la clave vive en un **HSM/KMS**, nunca en el código.
 - **Procedencia y linaje del dato (data lineage):** se registra de dónde vino cada
   dato, quién lo modificó y cuándo. Todo queda en un **log inmutable** (append-only,
   estilo blockchain/hash encadenado). Si algo sale mal, hay auditoría forense.
+  ✅ *Implementado: `procedencia.LibroMayor` — encadena cada bloque por hash y
+  detecta cualquier manipulación retroactiva del registro.*
 - **Separación de funciones y control de acceso:** quien captura el dato no es quien
   aprueba su ingreso al entrenamiento. Se elimina el punto único de manipulación.
 - **Semilla de confianza:** un conjunto de inspecciones **verificadas físicamente
@@ -96,8 +102,17 @@ un registro entra en **cuarentena** si lo marcan las señales primarias.
    los aísla **sin mirar las etiquetas**.
    → Caza las **inyecciones masivas** de registros falsos.
 
-> **Resultado en el POC:** detectamos ~78% del veneno inyectado. Lo dudoso se
-> pone en cuarentena para revisión humana, no se borra a ciegas.
+> **Resultado en el POC:** combinando la Capa 1 (criptografía) y la Capa 2 (IA),
+> detectamos el **100% del veneno** en el ataque de 3 vectores. La criptografía
+> frena la inyección y la manipulación de forma determinística; la IA caza al
+> **infiltrado corrupto** que logró firmar datos falsos con clave válida — el
+> único caso que la firma no puede detectar. Lo dudoso se pone en cuarentena para
+> revisión humana, no se borra a ciegas.
+
+> 🧩 **Modelo de amenaza (3 vectores) — implementado en `ataque_poisoning.py`:**
+> (1) inyección externa sin firma válida, (2) manipulación de etiquetas que rompe
+> la firma, (3) infiltrado con clave legítima. Demuestra por qué **ninguna capa
+> sola basta** y se necesita defensa en profundidad.
 
 ---
 
@@ -106,11 +121,13 @@ un registro entra en **cuarentena** si lo marcan las señales primarias.
 **Objetivo:** que el modelo sea difícil de mover incluso con datos contaminados.
 
 - **Reentrenamiento con datos saneados:** excluimos los registros en cuarentena y
-  reentrenamos. *(En el POC recuperamos ~61% del desempeño perdido.)*
-- **Validación obligatoria contra la semilla dorada:** un modelo nuevo **solo se
-  promueve a producción si mantiene o mejora el recall** sobre el conjunto dorado
-  verificado. Si el envenenamiento bajó el recall, el despliegue **se bloquea
-  automáticamente**.
+  reentrenamos. *(En el POC recuperamos por completo el desempeño perdido: el
+  recall vuelve a ~70%, igual o mejor que la línea base limpia.)*
+- **Gate de despliegue automático** ✅ *(implementado: `defensa.gate_despliegue`)*:
+  un modelo nuevo **solo se promueve a producción si mantiene el recall** sobre el
+  conjunto dorado verificado (mínimo absoluto + caída máxima tolerada). Si el
+  envenenamiento bajó el recall, el despliegue **se bloquea automáticamente** — así
+  el ataque se vuelve inútil aunque logre colarse.
 - **Técnicas de ML robusto (roadmap):** entrenamiento con poda de outliers, límites
   de influencia por registro, *ensemble* de modelos y aprendizaje robusto a ruido
   de etiquetas.
@@ -120,10 +137,12 @@ un registro entra en **cuarentena** si lo marcan las señales primarias.
 ### 📡 CAPA 4 — Monitoreo continuo (que no vuelva a pasar)
 
 **Objetivo:** vigilancia permanente, porque el atacante volverá a intentarlo.
+✅ *Implementado en código (`src/monitoreo.py`): drift con test KS, PSI y
+diferencia de proporción, con severidad (OK/ALERTA/CRÍTICO) y acción recomendada.*
 
 - **Detección de drift:** si la distribución de datos o de predicciones cambia
   bruscamente (p.ej. de repente muchos mataderos pasan a "seguros"), salta una
-  **alerta automática**.
+  **alerta automática** que escala a un inspector (nunca actúa sola).
 - **Auditoría cruzada campo vs. modelo:** un % de inspecciones se hace al azar
   (no solo las que el modelo prioriza). Si el modelo dijo "seguro" y en campo era
   insalubre, ese caso alimenta el detector y **castiga la fuente** del dato malo.
