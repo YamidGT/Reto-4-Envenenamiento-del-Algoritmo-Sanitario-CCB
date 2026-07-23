@@ -3,8 +3,9 @@ dashboard.py
 ============
 Dashboard visual del ataque vs. la defensa en profundidad (Streamlit).
 Pensado para la presentación en vivo ante el jurado: tema propio, tarjetas
-KPI, gráficos Plotly con la paleta validada del equipo (ver dataviz skill)
-y organización por pestañas.
+KPI, gráficos Plotly con la paleta validada del equipo (ver dataviz skill),
+organización por pestañas y una sección de robustez cuantitativa (barrido
+de intensidades de ataque x semillas).
 
 Ejecutar:  streamlit run app/dashboard.py
 """
@@ -25,6 +26,8 @@ from ataque_poisoning import envenenar                      # noqa: E402
 from defensa import (detectar_envenenamiento, metricas_deteccion,  # noqa: E402
                      limpiar_dataset, entrenar_modelo_referencia,
                      gate_despliegue)
+from robustez import (correr_barrido, resumen_por_tasa,             # noqa: E402
+                      registros_en_cuarentena_con_razon)
 
 # ---------------------------------------------------------------------------
 # Paleta — valores tomados de la referencia validada del dataviz skill
@@ -220,6 +223,38 @@ def grafico_importancia(importancias, top=5):
     return _layout_base(fig, "Top variables que más pesan en la predicción", altura=300)
 
 
+def grafico_robustez(resumen):
+    """2 series de magnitud comparable (ambas % 0-100) -> un solo eje
+    compartido, colores categóricos fijos (slot 1 y 2), leyenda visible
+    (regla: >=2 series siempre llevan leyenda)."""
+    x = (resumen["tasa_ataque"] * 100).round(0)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=x, y=resumen["recall_recuperado_pct_media"] * 100,
+        mode="lines+markers", name="% desempeño recuperado",
+        line=dict(color=CAT_ORDER[0], width=2), marker=dict(size=8),
+        hovertemplate="Ataque %{x:.0f}%%<br>Recuperado: %{y:.0f}%%<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=resumen["pct_veneno_detectado_media"] * 100,
+        mode="lines+markers", name="% veneno detectado",
+        line=dict(color=CAT_ORDER[1], width=2, dash="dot"), marker=dict(size=8),
+        hovertemplate="Ataque %{x:.0f}%%<br>Detectado: %{y:.0f}%%<extra></extra>",
+    ))
+    fig.update_layout(
+        title=dict(text="Robustez: recuperación y detección vs. intensidad del ataque",
+                   font=dict(size=15, color=INK)),
+        plot_bgcolor=SURFACE, paper_bgcolor=SURFACE,
+        font=dict(color=INK, family=FONT, size=13),
+        xaxis=dict(title="Intensidad del ataque (%)", showgrid=False),
+        yaxis=dict(title="%", showgrid=True, gridcolor=GRID, zeroline=False,
+                   range=[0, 110]),
+        margin=dict(t=52, b=40, l=40, r=20), height=360,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    return fig
+
+
 # ---------------------------------------------------------------------------
 # Hero + sidebar
 # ---------------------------------------------------------------------------
@@ -281,23 +316,24 @@ def pipeline(tasa):
     gate_rec = gate_despliegue(m_rec, metricas_referencia=m_limpio)
 
     return (m_limpio, m_env, m_rec, reporte, md, n_invalidos, gate_env, gate_rec,
-            modelo_recuperado)
+            modelo_recuperado, train_env, ref)
 
 
 # ---------------------------------------------------------------------------
 # Cuerpo principal
 # ---------------------------------------------------------------------------
 if correr or tasa:
-    (m_limpio, m_env, m_rec, reporte, md, n_invalidos,
-     gate_env, gate_rec, modelo_recuperado) = pipeline(tasa)
+    (m_limpio, m_env, m_rec, reporte, md, n_invalidos, gate_env, gate_rec,
+     modelo_recuperado, train_env, ref) = pipeline(tasa)
 
     st.markdown('<div class="cnb-quote">"No confiamos ciegamente en el dato: lo '
                'firmamos, lo auditamos, lo validamos contra la verdad de campo, '
                'y vigilamos el modelo en tiempo real."</div>',
                unsafe_allow_html=True)
 
-    tab_resumen, tab_defensa, tab_explica = st.tabs(
-        ["📊 Resumen ejecutivo", "🛡️ Defensa en profundidad", "🔍 Explicabilidad"])
+    tab_resumen, tab_defensa, tab_explica, tab_auditoria = st.tabs(
+        ["📊 Resumen ejecutivo", "🛡️ Defensa en profundidad", "🔍 Explicabilidad",
+         "🗂️ Auditoría"])
 
     # ------------------------------------------------------------------ TAB 1
     with tab_resumen:
@@ -382,9 +418,47 @@ if correr or tasa:
         importancias = importancia_variables(modelo_recuperado)
         st.plotly_chart(grafico_importancia(importancias), width="stretch")
 
+    # ------------------------------------------------------------------ TAB 4
+    with tab_auditoria:
+        seccion("🗂️", "Registros en cuarentena (con razón de detección)")
+        cuarentena_df = registros_en_cuarentena_con_razon(train_env, ref)
+        st.caption(f"{len(cuarentena_df)} registros aislados en esta corrida — "
+                  "ninguno se borra a ciegas, todos quedan trazables para "
+                  "revisión humana.")
+        st.dataframe(cuarentena_df, width="stretch")
+
     st.markdown('<div class="cnb-footer">Reto 4 — Envenenamiento del Algoritmo '
                'Sanitario · Cámara de Comercio de Bogotá · '
                'github.com/YamidGT/Reto-4-Envenenamiento-del-Algoritmo-Sanitario-CCB'
                '</div>', unsafe_allow_html=True)
 else:
     st.info("👈 Ajusta los parámetros y presiona **Ejecutar simulación**.")
+
+st.markdown("---")
+seccion("📈", "Robustez: ¿la defensa depende de un solo run con suerte?")
+st.caption("Barrido de 4 intensidades de ataque x 5 semillas cada una (20 "
+          "corridas independientes) — media y desviación estándar.")
+
+if st.button("🔁 Correr barrido de robustez (puede tardar ~1-2 min)"):
+    with st.spinner("Corriendo 20 experimentos (4 tasas x 5 semillas)..."):
+        df_barrido = correr_barrido()
+        resumen = resumen_por_tasa(df_barrido)
+
+    st.session_state["df_barrido"] = df_barrido
+    st.session_state["resumen_barrido"] = resumen
+
+if "resumen_barrido" in st.session_state:
+    resumen = st.session_state["resumen_barrido"]
+    st.plotly_chart(grafico_robustez(resumen), width="stretch")
+    st.dataframe(
+        resumen.rename(columns={
+            "tasa_ataque": "Tasa de ataque",
+            "recall_recuperado_pct_media": "Recuperado (media)",
+            "recall_recuperado_pct_std": "Recuperado (std)",
+            "pct_veneno_detectado_media": "Veneno detectado (media)",
+            "pct_veneno_detectado_std": "Veneno detectado (std)",
+        }),
+        width="stretch",
+    )
+    st.caption("Los datos completos (20 filas, una por corrida) se guardan en "
+              "`results/robustez_resultados.csv` al correr `python src/robustez.py`.")
