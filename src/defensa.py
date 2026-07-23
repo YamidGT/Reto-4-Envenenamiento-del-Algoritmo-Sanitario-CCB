@@ -41,12 +41,27 @@ from generar_datos import FEATURES
 def deteccion_por_reglas(df):
     """Marca como sospechosos los registros etiquetados 'seguro' que tienen un
     perfil objetivamente peligroso. Es una red de seguridad basada en dominio
-    experto (los inspectores sanitarios) — no depende del modelo."""
+    experto (los inspectores sanitarios) — no depende del modelo.
+
+    Los umbrales NO se calibran mirando cómo ataca el atacante (eso sería
+    circular: "detecto lo que yo mismo simulé"). Se derivan de la distribución
+    estadística de la población normal de establecimientos (ver
+    generar_datos.py): cada umbral corresponde aprox. al percentil 95-97 de su
+    variable, es decir, "más extremo que el 95-97% de los establecimientos
+    típicos" — un criterio que un inspector definiría con datos históricos,
+    sin conocer nunca el rango exacto que usa el atacante para fabricar
+    registros falsos (quejas 6-15, violaciones 5-12, temp 12-20, higiene 15-40):
+
+      - violaciones_previas >= 5   (percentil ~95 de la población normal)
+      - quejas_ciudadanas   >= 6   (percentil ~97 de la población normal)
+      - temp_refrigeracion_c >= 11 (percentil ~97 de la población normal)
+      - indice_higiene      <= 35  (cola inferior, higiene muy deficiente)
+    """
     perfil_peligroso = (
         (df["violaciones_previas"] >= 5) |
         (df["quejas_ciudadanas"] >= 6) |
-        (df["temp_refrigeracion_c"] >= 12) |
-        (df["indice_higiene"] <= 40)
+        (df["temp_refrigeracion_c"] >= 11) |
+        (df["indice_higiene"] <= 35)
     )
     # Contradicción: perfil peligroso PERO etiquetado como seguro (0)
     sospechoso = perfil_peligroso & (df["riesgo_alto"] == 0)

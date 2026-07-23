@@ -25,7 +25,8 @@ except Exception:
 sys.path.insert(0, os.path.dirname(__file__))
 
 from generar_datos import generar_datos
-from modelo import entrenar_modelo, evaluar, imprimir_metricas
+from modelo import (entrenar_modelo, evaluar, imprimir_metricas,
+                    importancia_variables, imprimir_importancia)
 from ataque_poisoning import envenenar
 from defensa import (detectar_envenenamiento, metricas_deteccion,
                      limpiar_dataset, entrenar_modelo_referencia)
@@ -112,6 +113,9 @@ def main():
     m_rec = evaluar(modelo_recuperado, test_dorado, "RECUPERADO")
     print("\nModelo REENTRENADO con datos saneados:")
     imprimir_metricas(m_rec)
+
+    print("\n  🔍 EXPLICABILIDAD (Capa 4 — el modelo se puede auditar):")
+    imprimir_importancia(importancia_variables(modelo_recuperado))
 
     # ===================================================================
     titulo("RESUMEN EJECUTIVO — Recall sobre alto riesgo (métrica crítica)")
